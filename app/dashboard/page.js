@@ -5,10 +5,44 @@ import { useState, useEffect } from 'react';
 export default function Dashboard() {
   const [deliveries, setDeliveries] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [password, setPassword] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [checkingAuth, setCheckingAuth] = useState(true);
 
   useEffect(() => {
-    fetchDeliveries();
+    const auth = sessionStorage.getItem('dashboard_auth');
+    if (auth === 'true') {
+      setIsAuthenticated(true);
+      fetchDeliveries();
+    }
+    setCheckingAuth(false);
   }, []);
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setAuthError('');
+
+    try {
+      const res = await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password })
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        sessionStorage.setItem('dashboard_auth', 'true');
+        setIsAuthenticated(true);
+        fetchDeliveries();
+      } else {
+        setAuthError('Invalid password');
+      }
+    } catch (error) {
+      setAuthError('Login failed');
+    }
+  };
 
   const fetchDeliveries = async () => {
     try {
@@ -19,6 +53,11 @@ export default function Dashboard() {
       console.error('Error fetching deliveries:', error);
     }
     setLoading(false);
+  };
+
+  const handleLogout = () => {
+    sessionStorage.removeItem('dashboard_auth');
+    setIsAuthenticated(false);
   };
 
   const deleteDelivery = async (id) => {
@@ -40,10 +79,40 @@ export default function Dashboard() {
   const pending = deliveries.filter(d => d.status === 'pending').length;
   const received = deliveries.filter(d => d.status === 'location_received').length;
 
+  if (checkingAuth) {
+    return <div style={styles.authContainer}><p>Loading...</p></div>;
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div style={styles.authContainer}>
+        <div style={styles.authCard}>
+          <h1 style={styles.authTitle}>Dashboard Login</h1>
+          <form onSubmit={handleLogin}>
+            <input
+              type="password"
+              placeholder="Enter password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              style={styles.authInput}
+            />
+            <button type="submit" style={styles.authBtn}>Login</button>
+          </form>
+          {authError && <p style={styles.authError}>{authError}</p>}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={styles.container}>
-      <h1 style={styles.title}>Delivery Dashboard</h1>
-      <p style={styles.subtitle}>Manage and track all deliveries</p>
+      <div style={styles.header}>
+        <div>
+          <h1 style={styles.title}>Delivery Dashboard</h1>
+          <p style={styles.subtitle}>Manage and track all deliveries</p>
+        </div>
+        <button onClick={handleLogout} style={styles.logoutBtn}>Logout</button>
+      </div>
 
       <div style={styles.stats}>
         <div style={styles.statCard}>
@@ -127,9 +196,17 @@ export default function Dashboard() {
 }
 
 const styles = {
+  authContainer: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f5f6fa' },
+  authCard: { background: 'white', padding: 40, borderRadius: 12, boxShadow: '0 4px 20px rgba(0,0,0,0.1)', textAlign: 'center', width: 320 },
+  authTitle: { color: '#2c3e50', marginBottom: 25, fontSize: 24 },
+  authInput: { width: '100%', padding: 12, border: '1px solid #ddd', borderRadius: 8, fontSize: 16, marginBottom: 15, boxSizing: 'border-box' },
+  authBtn: { width: '100%', padding: 12, background: '#3498db', color: 'white', border: 'none', borderRadius: 8, fontSize: 16, cursor: 'pointer' },
+  authError: { color: '#e74c3c', marginTop: 15, marginBottom: 0 },
   container: { maxWidth: 1200, margin: '0 auto', padding: 20 },
-  title: { color: '#2c3e50', marginBottom: 10 },
-  subtitle: { color: '#7f8c8d', marginBottom: 30 },
+  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 30 },
+  title: { color: '#2c3e50', marginBottom: 5, marginTop: 0 },
+  subtitle: { color: '#7f8c8d', marginBottom: 0 },
+  logoutBtn: { padding: '10px 20px', background: '#e74c3c', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 14 },
   stats: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 20, marginBottom: 30 },
   statCard: { background: 'white', padding: 25, borderRadius: 12, boxShadow: '0 2px 10px rgba(0,0,0,0.08)' },
   statNumber: { fontSize: 32, color: '#2c3e50', margin: 0 },
